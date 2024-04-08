@@ -701,7 +701,6 @@ function refresh_sceneitem(find_newest)
 
         -- Get the rest of the information needed to correctly zoom
         zoom_info.source_size = { width = source_width, height = source_height }
-        zoom_info.bounding_ratio = use_bounding_ratio and { x = bounding_ratio_x, y = bounding_ratio_y } or { x = source_width, y = source_height}
         zoom_info.source_crop = {
             l = sceneitem_crop_orig.left,
             t = sceneitem_crop_orig.top,
@@ -844,6 +843,7 @@ function on_toggle_zoom(pressed)
                 log("Zooming in")
                 -- To zoom in, we get a new target based on where the mouse was when zoom was clicked
                 zoom_state = ZoomState.ZoomingIn
+                zoom_info.bounding_ratio = use_bounding_ratio and { x = bounding_ratio_x, y = bounding_ratio_y } or { x = zoom_info.source_size.wdith, y = zoom_info.source_size.height}
                 zoom_info.zoom_to = zoom_value
                 zoom_time = 0
                 locked_center = nil

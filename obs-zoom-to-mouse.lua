@@ -67,6 +67,7 @@ local monitor_override_dh = 0
 local use_bounding_ratio = false
 local bounding_ratio_x = 0
 local bounding_ratio_y = 0
+local default_on = false
 local debug_logs = false
 
 local ZoomState = {
@@ -732,6 +733,11 @@ function refresh_sceneitem(find_newest)
         obs.obs_source_filter_set_order(source, crop_filter, obs.OBS_ORDER_MOVE_BOTTOM)
         set_crop_settings(crop_filter_info_orig)
     end
+
+    if default_on and zoom_state == ZoomState.None then
+        log("default on, zooming")
+        on_toggle_zoom(true)
+    end
 end
 
 ---
@@ -1085,6 +1091,7 @@ function log_current_settings()
         use_bounding_ratio = use_bounding_ratio,
         bounding_ratio_x = bounding_ratio_x,
         bounding_ratio_y = bounding_ratio_y,
+        default_on = default_on,
         debug_logs = debug_logs
     }
 
@@ -1187,6 +1194,8 @@ function script_properties()
     local bounding_box_x = obs.obs_properties_add_int(props, "bounding_ratio_x", "X", 0, 10000, 1)
     local bounding_box_y = obs.obs_properties_add_int(props, "bounding_ratio_y", "Y", 0, 10000, 1)
 
+    obs.obs_properties_add_bool(props, "default_on", "Default zoomed in")
+
     obs.obs_property_set_long_description(override_sx, "Usually 1 - unless you are using a scaled source")
     obs.obs_property_set_long_description(override_sy, "Usually 1 - unless you are using a scaled source")
     obs.obs_property_set_long_description(override_dw, "X resolution of your montior")
@@ -1260,6 +1269,7 @@ function script_load(settings)
     use_bounding_ratio = obs.obs_data_get_bool(settings, "use_bounding_ratio")
     bounding_ratio_x = obs.obs_data_get_int(settings, "bounding_ratio_x")
     bounding_ratio_y = obs.obs_data_get_int(settings, "bounding_ratio_y")
+    default_on = obs.obs_data_get_bool(settings, "default_on")
     debug_logs = obs.obs_data_get_bool(settings, "debug_logs")
 
     obs.obs_frontend_add_event_callback(on_frontend_event)
@@ -1332,6 +1342,7 @@ function script_defaults(settings)
     obs.obs_data_set_default_bool(settings, "use_bounding_ratio", false)
     obs.obs_data_set_default_int(settings, "bounding_ratio_x", 1920)
     obs.obs_data_set_default_int(settings, "bounding_ratio_y", 1080)
+    obs.obs_data_set_default_bool(settings, "default_on", false)
     obs.obs_data_set_default_bool(settings, "debug_logs", false)
 end
 
@@ -1385,6 +1396,7 @@ function script_update(settings)
     use_bounding_ratio = obs.obs_data_get_bool(settings, "use_bounding_ratio")
     bounding_ratio_x = obs.obs_data_get_int(settings, "bounding_ratio_x")
     bounding_ratio_y = obs.obs_data_get_int(settings, "bounding_ratio_y")
+    default_on = obs.obs_data_get_bool(settings, "default_on")
     debug_logs = obs.obs_data_get_bool(settings, "debug_logs")
 
     -- Only do the expensive refresh if the user selected a new source

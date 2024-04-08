@@ -23,6 +23,7 @@ local crop_filter_info_orig = { x = 0, y = 0, w = 0, h = 0 }
 local crop_filter_info = { x = 0, y = 0, w = 0, h = 0 }
 local monitor_info = nil
 local zoom_info = {
+    bounding_ratio = { x = 0, y = 0},
     source_size = { width = 0, height = 0 },
     source_crop = { x = 0, y = 0, w = 0, h = 0 },
     source_crop_filter = { x = 0, y = 0, w = 0, h = 0 },
@@ -63,6 +64,9 @@ local monitor_override_sx = 0
 local monitor_override_sy = 0
 local monitor_override_dw = 0
 local monitor_override_dh = 0
+local use_bounding_ratio = false
+local bounding_ratio_x = 0
+local bounding_ratio_y = 0
 local debug_logs = false
 
 local ZoomState = {
@@ -696,6 +700,7 @@ function refresh_sceneitem(find_newest)
 
         -- Get the rest of the information needed to correctly zoom
         zoom_info.source_size = { width = source_width, height = source_height }
+        zoom_info.bounding_ratio = use_bounding_ratio and { x = bounding_ratio_x, y = bounding_ratio_y } or { x = source_width, y = source_height}
         zoom_info.source_crop = {
             l = sceneitem_crop_orig.left,
             t = sceneitem_crop_orig.top,
@@ -760,9 +765,20 @@ function get_target_position(zoom)
     -- Get the new size after we zoom
     -- Remember that because we are using a crop/pad filter making the size smaller (dividing by zoom) means that we see less of the image
     -- in the same amount of space making it look bigger (aka zoomed in)
+    local bounding_x = zoom.source_size.width
+    local bounding_y = zoom.source_size.height
+    if zoom.bounding_ratio.x ~= zoom.source_size.width or zoom.bounding_ratio.y ~= zoom.source_size.height then
+        local bounding_ratio = zoom.bounding_ratio.x / zoom.bounding_ratio.y
+        local source_ratio = zoom.source_size.width / zoom.source_size.height
+        if bounding_ratio > source_ratio then
+            bounding_y = bounding_x / bounding_ratio
+        elseif bounding_ratio < source_ratio then
+            bounding_x = bounding_y * bounding_ratio
+        end
+    end
     local new_size = {
-        width = zoom.source_size.width / zoom.zoom_to,
-        height = zoom.source_size.height / zoom.zoom_to
+        width = bounding_x / zoom.zoom_to,
+        height = bounding_y / zoom.zoom_to
     }
 
     -- New offset for the crop/pad filter is whereever we clicked minus half the size, so that the clicked point because the new center
@@ -1027,6 +1043,11 @@ function on_settings_modified(props, prop, settings)
         obs.obs_property_set_visible(obs.obs_properties_get(props, "monitor_override_dw"), visible)
         obs.obs_property_set_visible(obs.obs_properties_get(props, "monitor_override_dh"), visible)
         return true
+    elseif name == "use_bounding_ratio" then
+        local visible = obs.obs_data_get_bool(settings, "use_bounding_ratio")
+        obs.obs_property_set_visible(obs.obs_properties_get(props, "bounding_ratio_x"), visible)
+        obs.obs_property_set_visible(obs.obs_properties_get(props, "bounding_ratio_y"), visible)
+        return true
     elseif name == "allow_all_sources" then
         local sources_list = obs.obs_properties_get(props, "source")
         populate_zoom_sources(sources_list)
@@ -1061,6 +1082,9 @@ function log_current_settings()
         monitor_override_sy = monitor_override_sy,
         monitor_override_dw = monitor_override_dw,
         monitor_override_dh = monitor_override_dh,
+        use_bounding_ratio = use_bounding_ratio,
+        bounding_ratio_x = bounding_ratio_x,
+        bounding_ratio_y = bounding_ratio_y,
         debug_logs = debug_logs
     }
 
@@ -1159,6 +1183,10 @@ function script_properties()
     local override_dw = obs.obs_properties_add_int(props, "monitor_override_dw", "Monitor Width ", 0, 10000, 1)
     local override_dh = obs.obs_properties_add_int(props, "monitor_override_dh", "Monitor Height ", 0, 10000, 1)
 
+    local bounding_box = obs.obs_properties_add_bool(props, "use_bounding_ratio", "Set manual bounding box ratio")
+    local bounding_box_x = obs.obs_properties_add_int(props, "bounding_ratio_x", "X", 0, 10000, 1)
+    local bounding_box_y = obs.obs_properties_add_int(props, "bounding_ratio_y", "Y", 0, 10000, 1)
+
     obs.obs_property_set_long_description(override_sx, "Usually 1 - unless you are using a scaled source")
     obs.obs_property_set_long_description(override_sy, "Usually 1 - unless you are using a scaled source")
     obs.obs_property_set_long_description(override_dw, "X resolution of your montior")
@@ -1181,7 +1209,10 @@ function script_properties()
     obs.obs_property_set_visible(override_sy, use_monitor_override)
     obs.obs_property_set_visible(override_dw, use_monitor_override)
     obs.obs_property_set_visible(override_dh, use_monitor_override)
+    obs.obs_property_set_visible(bounding_box_x, use_bounding_ratio)
+    obs.obs_property_set_visible(bounding_box_y, use_bounding_ratio)
     obs.obs_property_set_modified_callback(override, on_settings_modified)
+    obs.obs_property_set_modified_callback(bounding_box, on_settings_modified)
     obs.obs_property_set_modified_callback(allow_all, on_settings_modified)
     obs.obs_property_set_modified_callback(debug, on_settings_modified)
 
@@ -1226,6 +1257,9 @@ function script_load(settings)
     monitor_override_sy = obs.obs_data_get_double(settings, "monitor_override_sy")
     monitor_override_dw = obs.obs_data_get_int(settings, "monitor_override_dw")
     monitor_override_dh = obs.obs_data_get_int(settings, "monitor_override_dh")
+    use_bounding_ratio = obs.obs_data_get_bool(settings, "use_bounding_ratio")
+    bounding_ratio_x = obs.obs_data_get_int(settings, "bounding_ratio_x")
+    bounding_ratio_y = obs.obs_data_get_int(settings, "bounding_ratio_y")
     debug_logs = obs.obs_data_get_bool(settings, "debug_logs")
 
     obs.obs_frontend_add_event_callback(on_frontend_event)
@@ -1295,6 +1329,9 @@ function script_defaults(settings)
     obs.obs_data_set_default_double(settings, "monitor_override_sy", 1)
     obs.obs_data_set_default_int(settings, "monitor_override_dw", 1920)
     obs.obs_data_set_default_int(settings, "monitor_override_dh", 1080)
+    obs.obs_data_set_default_bool(settings, "use_bounding_ratio", false)
+    obs.obs_data_set_default_int(settings, "bounding_ratio_x", 1920)
+    obs.obs_data_set_default_int(settings, "bounding_ratio_y", 1080)
     obs.obs_data_set_default_bool(settings, "debug_logs", false)
 end
 
@@ -1345,6 +1382,9 @@ function script_update(settings)
     monitor_override_sy = obs.obs_data_get_double(settings, "monitor_override_sy")
     monitor_override_dw = obs.obs_data_get_int(settings, "monitor_override_dw")
     monitor_override_dh = obs.obs_data_get_int(settings, "monitor_override_dh")
+    use_bounding_ratio = obs.obs_data_get_bool(settings, "use_bounding_ratio")
+    bounding_ratio_x = obs.obs_data_get_int(settings, "bounding_ratio_x")
+    bounding_ratio_y = obs.obs_data_get_int(settings, "bounding_ratio_y")
     debug_logs = obs.obs_data_get_bool(settings, "debug_logs")
 
     -- Only do the expensive refresh if the user selected a new source
